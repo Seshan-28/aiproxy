@@ -2,8 +2,6 @@
 
 A production-style API governance layer for Claude (Anthropic), built to monitor, control, and audit LLM usage across multiple users and departments.
 
-> Built as a 12-day internship project at Authify Technologies, inspired by internal tooling requirements for enterprise AI deployment.
-
 ---
 
 ## What It Does
@@ -21,6 +19,7 @@ Most companies plugging LLMs into internal tools have no visibility into who is 
 ---
 
 ## Architecture
+```
 Browser
 │
 ▼
@@ -32,6 +31,7 @@ Flask App (app.py)
 Admin UI (/admin)        → charts, log table, conversation replay
 Policy Editor (/admin/policies) → set per-user limits
 Chat Console (/)         → test interface with mode switcher
+```
 
 ---
 
