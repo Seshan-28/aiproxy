@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AIProxy — Policies</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #0f1117; color: #e0e0e0; }
+        .sidebar {
+            width: 220px; min-height: 100vh;
+            background: #1a1d27;
+            padding: 24px 16px;
+            position: fixed; top: 0; left: 0;
+        }
+        .main { margin-left: 220px; padding: 32px; }
+        .card-dark {
+            background: #1a1d27;
+            border: 1px solid #2a2d3a;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        .nav-link { color: #aaa; border-radius: 8px; padding: 8px 12px; }
+        .nav-link:hover, .nav-link.active { background: #2a2d3a; color: #f5a623; }
+        .form-control, .form-select {
+            background: #0f1117;
+            border: 1px solid #2a2d3a;
+            color: #e0e0e0;
+        }
+        .form-control:focus {
+            background: #0f1117;
+            border-color: #f5a623;
+            color: #e0e0e0;
+            box-shadow: none;
+        }
+        .form-label { color: #aaa; font-size: 0.85rem; margin-bottom: 4px; }
+        .progress { background: #2a2d3a; height: 8px; border-radius: 4px; }
+        .alert-row {
+            border-left: 3px solid #e57373;
+            padding: 10px 14px;
+            background: #12151f;
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        .alert-row.warning { border-left-color: #f5a623; }
+        .alert-row.resolved { opacity: 0.4; }
+        .badge-block { background: #e57373; font-size: 0.75rem; }
+        .badge-warn  { background: #f5a623; color: #000; font-size: 0.75rem; }
+        .table-dark td, .table-dark th { vertical-align: middle; }
+        #errorBox { display:none; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <div class="mb-4">
+        <h5 class="text-warning fw-bold">⚡ AIProxy</h5>
+        <small class="text-muted">Governance Dashboard</small>
+    </div>
+    <nav class="d-flex flex-column gap-1">
+        <a href="/" class="nav-link">💬 Chat Console</a>
+        <a href="/admin" class="nav-link">📊 Admin Panel</a>
+        <a href="/admin/policies" class="nav-link active">🛡️ Policies</a>
+        <a href="/admin/export" class="nav-link">📥 Export CSV</a>
+    </nav>
+</div>
+
+<div class="main">
+
+    <!-- Error box -->
+    <div id="errorBox" class="alert alert-danger"></div>
+
+    <!-- Policy Editor -->
+    <div class="card-dark">
+        <h5 class="text-warning mb-4">🛡️ Usage Policy Editor</h5>
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">User ID</label>
+                <input id="pUserId" class="form-control" placeholder="e.g. seshan">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Max Tokens / Day</label>
+                <input id="pTokens" class="form-control" type="number" value="10000">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Max Cost / Day (USD)</label>
+                <input id="pCost" class="form-control" type="number" step="0.01" value="1.00">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Max Calls / Day</label>
+                <input id="pCalls" class="form-control" type="number" value="50">
+            </div>
+        </div>
+        <div class="mt-3 d-flex align-items-center gap-3">
+            <button class="btn btn-warning" onclick="savePolicy()">Save Policy</button>
+            <span id="saveMsg" class="text-success" style="display:none">✓ Policy saved</span>
+            <span id="saveErr" class="text-danger" style="display:none">✗ Enter a valid User ID</span>
+        </div>
+    </div>
+
+    <!-- Active Policies Table -->
+    <div class="card-dark">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="text-muted mb-0">Active Policies</h6>
+            <button class="btn btn-sm btn-outline-warning" onclick="loadPolicies()">↻ Refresh</button>
+        </div>
+        <div id="noPolicies" class="text-muted" style="display:none">
+            No policies set yet. Create one above.
+        </div>
+        <div class="table-responsive">
+            <table class="table table-dark table-hover table-sm" id="policiesTableWrap">
+                <thead class="text-warning">
+                    <tr>
+                        <th>User</th>
+                        <th>Max Tokens/Day</th>
+                        <th>Max Cost/Day</th>
+                        <th>Max Calls/Day</th>
+                        <th>Today's Usage</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="policiesTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Alerts Feed -->
+    <div class="card-dark">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="text-muted mb-0">🚨 Alert Feed</h6>
+            <button class="btn btn-sm btn-outline-warning" onclick="loadAlerts()">↻ Refresh</button>
+        </div>
+        <div id="alertsFeed"><p class="text-muted">Loading...</p></div>
+    </div>
+
+</div>
+
+<script>
+    // ── Save Policy ──────────────────────────────────────────────
+    async function savePolicy() {
+        const userId = document.getElementById('pUserId').value.trim();
+        if (!userId) {
+            document.getElementById('saveErr').style.display = 'inline';
+            setTimeout(() => document.getElementById('saveErr').style.display = 'none', 2000);
+            return;
+        }
+
+        const payload = {
+            user_id:        userId,
+            max_tokens_day: parseInt(document.getElementById('pTokens').value),
+            max_cost_day:   parseFloat(document.getElementById('pCost').value),
+            max_calls_day:  parseInt(document.getElementById('pCalls').value)
+        };
+
+        try {
+            const res = await fetch('/api/policies', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.status === 'saved') {
+                document.getElementById('saveMsg').style.display = 'inline';
+                setTimeout(() => document.getElementById('saveMsg').style.display = 'none', 2000);
+                document.getElementById('pUserId').value = '';
+                loadPolicies();
+            }
+        } catch(e) {
+            showError('Failed to save policy: ' + e.message);
+        }
+    }
+
+    // ── Delete Policy ────────────────────────────────────────────
+    async function deletePolicy(userId) {
+        if (!confirm(`Remove policy for "${userId}"?`)) return;
+        await fetch(`/api/policies/${userId}`, { method: 'DELETE' });
+        loadPolicies();
+    }
+
+    // ── Load Policies Table ──────────────────────────────────────
+    async function loadPolicies() {
+        try {
+            const res  = await fetch('/api/policies');
+            const rows = await res.json();
+
+            const tbody = document.getElementById('policiesTable');
+            const wrap  = document.getElementById('policiesTableWrap');
+            const none  = document.getElementById('noPolicies');
+
+            if (rows.length === 0) {
+                wrap.style.display = 'none';
+                none.style.display = 'block';
+                return;
+            }
+
+            wrap.style.display = 'table';
+            none.style.display = 'none';
+
+            // Fetch today's usage for each user safely
+            const usages = await Promise.all(rows.map(async r => {
+                try {
+                    const u = await fetch(`/api/usage/${r.user_id}`);
+                    return await u.json();
+                } catch {
+                    return { usage: { calls: 0, tokens: 0, cost: 0 }, policy: {} };
+                }
+            }));
+
+            tbody.innerHTML = rows.map((r, i) => {
+                const usage = usages[i]?.usage || { calls: 0, tokens: 0, cost: 0 };
+
+                const tokenPct = Math.min(100, r.max_tokens_day > 0
+                    ? Math.round((usage.tokens / r.max_tokens_day) * 100) : 0);
+                const costPct  = Math.min(100, r.max_cost_day > 0
+                    ? Math.round((usage.cost  / r.max_cost_day)  * 100) : 0);
+                const callsPct = Math.min(100, r.max_calls_day > 0
+                    ? Math.round((usage.calls / r.max_calls_day) * 100) : 0);
+
+                const barColor = (pct) =>
+                    pct >= 100 ? 'bg-danger' : pct >= 80 ? 'bg-warning' : 'bg-success';
+
+                return `
+                <tr>
+                    <td><span class="badge bg-warning text-dark">${r.user_id}</span></td>
+                    <td>${r.max_tokens_day.toLocaleString()}</td>
+                    <td>$${r.max_cost_day.toFixed(2)}</td>
+                    <td>${r.max_calls_day}</td>
+                    <td style="min-width:200px">
+                        <div class="mb-1">
+                            <div class="d-flex justify-content-between">
+                                <small class="text-muted">Tokens</small>
+                                <small class="text-muted">${usage.tokens}/${r.max_tokens_day} (${tokenPct}%)</small>
+                            </div>
+                            <div class="progress mb-1">
+                                <div class="progress-bar ${barColor(tokenPct)}" style="width:${tokenPct}%"></div>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <small class="text-muted">Calls</small>
+                                <small class="text-muted">${usage.calls}/${r.max_calls_day} (${callsPct}%)</small>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar ${barColor(callsPct)}" style="width:${callsPct}%"></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deletePolicy('${r.user_id}')">
+                            Remove
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+
+        } catch(e) {
+            showError('Failed to load policies: ' + e.message);
+        }
+    }
+
+    // ── Load Alerts ──────────────────────────────────────────────
+    async function loadAlerts() {
+        try {
+            const res    = await fetch('/api/alerts');
+            const alerts = await res.json();
+            const feed   = document.getElementById('alertsFeed');
+
+            if (alerts.length === 0) {
+                feed.innerHTML = '<p class="text-muted">No alerts yet. Trigger one by setting a low limit and sending a message.</p>';
+                return;
+            }
+
+            const badgeHtml = (type) => {
+                if (type.includes('WARNING'))
+                    return `<span class="badge badge-warn">${type}</span>`;
+                return `<span class="badge badge-block text-light">${type}</span>`;
+            };
+
+            feed.innerHTML = alerts.map(a => `
+                <div class="alert-row ${a.alert_type.includes('WARNING') ? 'warning' : ''} ${a.resolved ? 'resolved' : ''}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            ${badgeHtml(a.alert_type)}
+                            <span class="badge bg-secondary ms-1">${a.user_id}</span>
+                            <span class="ms-2 small">${a.message}</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 ms-3">
+                            <small class="text-muted text-nowrap">
+                                ${new Date(a.timestamp + 'Z').toLocaleString()}
+                            </small>
+                            ${!a.resolved
+                                ? `<button class="btn btn-sm btn-outline-success" onclick="resolveAlert(${a.id})">Resolve</button>`
+                                : `<span class="badge bg-success">Resolved</span>`
+                            }
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+        } catch(e) {
+            showError('Failed to load alerts: ' + e.message);
+        }
+    }
+
+    // ── Resolve Alert ────────────────────────────────────────────
+    async function resolveAlert(id) {
+        await fetch(`/api/alerts/${id}/resolve`, { method: 'POST' });
+        loadAlerts();
+    }
+
+    // ── Error Helper ─────────────────────────────────────────────
+    function showError(msg) {
+        const box = document.getElementById('errorBox');
+        box.textContent = msg;
+        box.style.display = 'block';
+        setTimeout(() => box.style.display = 'none', 4000);
+    }
+
+    // Boot
+    loadPolicies();
+    loadAlerts();
+</script>
+</body>
+</html>

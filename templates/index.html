@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AIProxy Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-dark text-light p-4">
+
+    <h2 class="mb-4">⚡ AIProxy — Test Console</h2>
+
+        <!-- Mode selector bar -->
+    <div class="container mt-3">
+    <div class="d-flex gap-2 flex-wrap mb-3" id="modeBar">
+        <!-- Populated by JS -->
+    </div>
+    </div>
+
+    <!-- Chat interface -->
+    <div class="container">
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+        <span id="activeModeLabel">🤖 General Assistant</span>
+        <small class="text-muted">User: <strong id="displayUser">user_001</strong></small>
+        </div>
+
+        <!-- Message history -->
+        <div class="card-body" id="chatHistory"
+            style="height: 380px; overflow-y: auto; background: #f8f9fa;">
+        <p class="text-muted text-center mt-5">Start a conversation below ↓</p>
+        </div>
+
+        <!-- Input row -->
+        <div class="card-footer">
+        <div class="input-group">
+            <input type="text" id="userMsg" class="form-control"
+                placeholder="Type your message…" />
+            <button class="btn btn-primary" onclick="sendMessage()">Send</button>
+        </div>
+        <div class="d-flex gap-3 mt-2 align-items-center flex-wrap">
+            <small>User ID:
+                <select id="userId" class="form-select form-select-sm d-inline-block w-auto">
+                    <option>user_001</option>
+                    <option>user_002</option>
+                    <option>admin</option>
+                </select>
+            </small>
+            <button class="btn btn-outline-secondary btn-sm" onclick="newSession()">
+                + New Session
+            </button>
+            <small class="text-muted" id="sessionLabel"></small>
+            <small id="statusLine" class="text-muted">Ready</small>
+        </div>
+        </div>
+    </div>
+    </div>
+
+    <script>
+    let currentMode = "general";
+    let modes = {};
+    // Generate a session ID when the page loads — persists for this browser tab
+    let sessionId = 'sess_' + Math.random().toString(36).substr(2, 9);
+
+    // Then in sendMessage(), add session_id to the fetch body:
+    body: JSON.stringify({ user_id: userId, message, mode: currentMode, session_id: sessionId }),
+    // Load modes from API and render switcher buttons
+    async function loadModes() {
+        const res = await fetch("/api/modes");
+        modes = await res.json();
+        const bar = document.getElementById("modeBar");
+        bar.innerHTML = "";
+        for (const [key, m] of Object.entries(modes)) {
+        const btn = document.createElement("button");
+        btn.className = `btn btn-outline-${m.color} btn-sm`;
+        btn.id = `mode-btn-${key}`;
+        btn.textContent = `${m.icon} ${m.label}`;
+        btn.onclick = () => selectMode(key);
+        bar.appendChild(btn);
+        }
+        selectMode("general");
+    }
+
+    function selectMode(key) {
+        currentMode = key;
+        // Update button styles
+        for (const k of Object.keys(modes)) {
+        const btn = document.getElementById(`mode-btn-${k}`);
+        const color = modes[k].color;
+        btn.className = `btn btn-${k === key ? "" : "outline-"}${color} btn-sm`;
+        }
+        document.getElementById("activeModeLabel").textContent =
+        `${modes[key].icon} ${modes[key].label}`;
+        appendSystem(`Switched to ${modes[key].label}`);
+    }
+
+    function newSession() {
+        sessionId = 'sess_' + Math.random().toString(36).substr(2, 9);
+        document.getElementById('chatHistory').innerHTML =
+            '<p class="text-muted text-center mt-5">Start a conversation below ↓</p>';
+        document.getElementById('sessionLabel').textContent = sessionId;
+        appendSystem('New session started');
+    }
+
+    function appendSystem(text) {
+        const history = document.getElementById("chatHistory");
+        const el = document.createElement("div");
+        el.className = "text-center text-muted small my-2";
+        el.textContent = `— ${text} —`;
+        history.appendChild(el);
+        history.scrollTop = history.scrollHeight;
+    }
+
+    function appendBubble(role, text, meta = "") {
+        const history = document.getElementById("chatHistory");
+        const wrapper = document.createElement("div");
+        wrapper.className = `d-flex ${role === "user" ? "justify-content-end" : "justify-content-start"} mb-2`;
+
+        const bubble = document.createElement("div");
+        bubble.className = `p-2 rounded-3 ${
+        role === "user"
+            ? "bg-primary text-white"
+            : "bg-white border text-dark"
+        }`;
+        bubble.style.maxWidth = "72%";
+        bubble.innerHTML = `<div>${text}</div>${
+        meta ? `<small class="opacity-75 d-block mt-1">${meta}</small>` : ""
+        }`;
+
+        wrapper.appendChild(bubble);
+        history.appendChild(wrapper);
+        history.scrollTop = history.scrollHeight;
+    }
+
+    async function sendMessage() {
+        const input = document.getElementById("userMsg");
+        const userId = document.getElementById("userId").value;
+        const message = input.value.trim();
+        if (!message) return;
+
+        input.value = "";
+        appendBubble("user", message);
+        document.getElementById("statusLine").textContent = "Thinking…";
+
+        try {
+        const res = await fetch("/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: userId, message, mode: currentMode }),
+        });
+        const data = await res.json();
+
+        if (data.blocked) {
+            appendSystem(`⛔ Blocked: ${data.error}`);
+        } else {
+            appendBubble(
+            "assistant",
+            data.reply,
+            `${data.tokens} tokens · $${data.cost.toFixed(6)} · ${data.latency_ms}ms · ${currentMode}`
+            );
+        }
+        document.getElementById("statusLine").textContent = "Ready";
+        } catch (err) {
+        appendSystem("❌ Network error");
+        document.getElementById("statusLine").textContent = "Error";
+        }
+    }
+
+    // Allow Enter key to send
+    document.getElementById("userMsg")?.addEventListener("keydown", e => {
+        if (e.key === "Enter") sendMessage();
+    });
+
+    loadModes();
+    </script>
+
+    <!-- Stats -->
+    <div class="card bg-secondary mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Live Stats <button class="btn btn-sm btn-outline-light ms-2" onclick="loadStats()">Refresh</button></h5>
+            <div id="statsOutput" class="text-muted">Click Refresh to load</div>
+        </div>
+    </div>
+
+    <!-- Logs Table -->
+    <div class="card bg-secondary">
+        <div class="card-body">
+            <h5 class="card-title">Request Log <button class="btn btn-sm btn-outline-light ms-2" onclick="loadLogs()">Refresh</button></h5>
+            <div class="table-responsive">
+                <table class="table table-dark table-sm table-hover mt-2">
+                    <thead>
+                        <tr>
+                            <th>#</th><th>User</th><th>Message</th>
+                            <th>Tokens</th><th>Cost</th><th>Latency</th><th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+            async function loadLogs() {
+                const res = await fetch('/api/logs');
+                const logs = await res.json();
+                const tbody = document.getElementById('logsTable');
+                tbody.innerHTML = logs.map(l => `
+                    <tr>
+                        <td>${l.id}</td>
+                        <td><span class="badge bg-warning text-dark">${l.user_id}</span></td>
+                        <td class="text-truncate" style="max-width:200px">${l.prompt || l.user_message || ''}</td>
+                        <td>${(l.tokens || 0) + (l.input_tokens || 0)}</td>
+                        <td>$${(l.cost || l.cost_usd || 0)}</td>
+                        <td>${l.latency_ms}ms</td>
+                        <td>${new Date(l.timestamp).toLocaleTimeString()}</td>
+                    </tr>
+                `).join('');
+            }
+
+            async function loadStats() {
+                const res = await fetch('/api/stats');
+                const data = await res.json();
+                document.getElementById('statsOutput').innerHTML = `
+                    <strong>Total Calls:</strong> ${data.totals.calls} &nbsp;|&nbsp;
+                    <strong>Total Tokens:</strong> ${data.totals.total_tokens} &nbsp;|&nbsp;
+                    <strong>Total Cost:</strong> $${data.totals.total_cost}
+                    <hr>
+                    <strong>Per User:</strong><br>
+                    ${data.per_user.map(u => `${u.user_id}: ${u.calls} calls, ${u.tokens} tokens, $${u.cost}`).join('<br>')}
+                `;
+            }
+
+            loadLogs();
+            loadStats();
+        </script>
+    </body>
+    </html>
+
+</body>
+</html>
