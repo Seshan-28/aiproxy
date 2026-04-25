@@ -1,0 +1,17 @@
+# Environment — contains API keys
+.env
+
+# Database — contains user data
+aiproxy.db
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Migration/fix scripts — not part of the app
+fix_db.py
+migrate_add_mode.py
+
+# OS
+.DS_Store
