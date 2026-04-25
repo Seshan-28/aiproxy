@@ -43,7 +43,6 @@ Chat Console (/)         → test interface with mode switcher
 | Database | SQLite (swap-ready for Postgres) |
 | AI Client | Anthropic Claude SDK (mock mode default) |
 | Frontend | Bootstrap 5, Chart.js |
-| Auth (planned) | Per-user API key via Authify |
 
 ---
 
