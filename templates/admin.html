@@ -65,6 +65,26 @@
             .sidebar { display: none; }
             .main { margin-left: 0; padding: 16px; }
         }
+        .chart-card h6 {
+            color: #e0e0e0 !important;
+            font-weight: 600;
+        }
+
+        /* Brighter table text */
+        #logsTableBody tr td {
+            color: #e0e0e0;
+        }
+        #logsTableBody tr td.text-muted {
+            color: #aaaaaa !important;
+        }
+        .table-dark thead th {
+            color: #f5a623 !important;
+            font-weight: 700;
+        }
+        /* Response column specifically */
+        #logsTableBody .text-truncate {
+            color: #d0d0d0 !important;
+        }
     </style>
 </head>
 <body>
@@ -137,7 +157,7 @@
         <div class="col-md-6">
             <div class="chart-card">
                 <h6 class="text-muted mb-3">Calls Per User</h6>
-                <canvas id="callsByUserChart" height="200"></canvas>
+                <canvas id="callsByUserChart" height="120"></canvas>
             </div>
         </div>
     </div>
@@ -270,7 +290,11 @@
         userChart = new Chart(document.getElementById('callsByUserChart'), {
             type: 'doughnut',
             data: { labels, datasets: [{ data: calls, backgroundColor: colors, borderWidth: 0 }]},
-            options: { plugins: { legend: { labels: { color: '#aaa' } } } }
+            // options: { plugins: { legend: { labels: { color: '#aaa' } } } }
+            options: {
+                maintainAspectRatio: true,
+                plugins: { legend: { labels: { color: '#aaa' } } }
+            }
         });
     }
 

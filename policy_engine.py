@@ -27,8 +27,8 @@ def get_today_usage(user_id):
     usage = conn.execute("""
         SELECT
             COUNT(*) as calls,
-            COALESCE(SUM(input_tokens + output_tokens + COALESCE(tokens,0)), 0) as tokens,
-            COALESCE(ROUND(SUM(COALESCE(cost_usd,0) + COALESCE(cost,0)), 6), 0) as cost
+            COALESCE(SUM(COALESCE(tokens, 0) + COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)), 0) as tokens,
+            COALESCE(ROUND(SUM(COALESCE(cost, 0) + COALESCE(cost_usd, 0)), 6), 0) as cost
         FROM api_logs
         WHERE user_id = ? AND DATE(timestamp) = DATE('now')
     """, (user_id,)).fetchone()

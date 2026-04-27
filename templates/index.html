@@ -42,6 +42,10 @@
                     <option>user_001</option>
                     <option>user_002</option>
                     <option>admin</option>
+                    <option>seshan</option>
+                    <option>john</option>
+                    <option>testuser</option>
+                    <option>analyst</option>
                 </select>
             </small>
             <button class="btn btn-outline-secondary btn-sm" onclick="newSession()">
@@ -61,7 +65,7 @@
     let sessionId = 'sess_' + Math.random().toString(36).substr(2, 9);
 
     // Then in sendMessage(), add session_id to the fetch body:
-    body: JSON.stringify({ user_id: userId, message, mode: currentMode, session_id: sessionId }),
+    
     // Load modes from API and render switcher buttons
     async function loadModes() {
         const res = await fetch("/api/modes");
