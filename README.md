@@ -79,7 +79,7 @@ from claude_client import call_claude      # real
 
 **Why SQLite?** Appropriate for a single-node internship project. The `get_db()` pattern and schema are designed to migrate to Postgres with minimal changes.
 
-**Why Flask over FastAPI?** Simpler mental model for a 12-day build. The route patterns and DB access would translate directly to FastAPI with async if needed.
+**Why Flask over FastAPI?** Simpler mental model for a quick build. The route patterns and DB access would translate directly to FastAPI with async if needed.
 
 ---
 
