@@ -1,49 +1,118 @@
 # app.py
-from flask import Flask, request, jsonify, render_template, Response
+from flask import Flask, request, jsonify, render_template, Response, redirect, url_for, flash, abort
 from config import Config
-from mock_claude_client import call_claude
+from google_client import call_google
 from database import init_db, get_db
 from prompt_modes import get_system_prompt, all_modes
 from policy_engine import check_policy, fire_alert, get_today_usage, get_policy
+from auth import User, get_user_by_id, get_user_by_username, admin_required
 import csv, io, time
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from werkzeug.security import check_password_hash
 
 app = Flask(__name__)
 app.config.from_object(Config)
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = "login"
+
+@login_manager.user_loader
+def load_user(user_db_id):
+    return get_user_by_id(user_db_id)
 
 with app.app_context():
     init_db()
 
 @app.route("/")
+@login_required
 def index():
     return render_template("index.html")
 
 @app.route("/admin")
+@admin_required
 def admin():
     return render_template("admin.html")
 
 @app.route("/admin/policies")
+@admin_required
 def policies_page():
     return render_template("policies.html")
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+        login_type = request.form.get("login_type") # 'user' or 'admin'
+
+        user_row = get_user_by_username(username)
+        if user_row and check_password_hash(user_row["password_hash"], password):
+            if user_row["role"] != login_type:
+                flash(f"Access Denied: You are not registered as {login_type}.", "danger")
+            else:
+                user_obj = User(id=user_row["id"], user_id=user_row["user_id"], role=user_row["role"])
+                login_user(user_obj)
+                return redirect(url_for("index"))
+        else:
+            flash("Invalid username or password.", "danger")
+    
+    return render_template("login.html")
+
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for("login"))
+
+def fetch_session_history(session_id, limit=5):
+    if not session_id:
+        return ""
+    db = get_db()
+    try:
+        rows = db.execute("""
+            SELECT prompt, response FROM api_logs
+            WHERE session_id = ?
+            ORDER BY timestamp DESC LIMIT ?
+        """, (session_id, limit)).fetchall()
+        
+        # Reverse to get chronological order
+        rows.reverse()
+        
+        history_str = ""
+        for r in rows:
+            history_str += f"User: {r['prompt']}\nAI: {r['response']}\n"
+        return history_str
+    finally:
+        db.close()
+
 # ── Chat ──────────────────────────────────────────────────────────────────────
 @app.route("/chat", methods=["POST"])
+@login_required
 def chat():
     data = request.get_json()
-    user_id    = data.get("user_id", "anonymous")
+    user_id    = current_user.user_id
     message    = data.get("message", "")
     mode       = data.get("mode", "general")
-    session_id = data.get("session_id", "")   # ← new
+    session_id = data.get("session_id", "")
 
     if not message:
         return jsonify({"error": "message is required"}), 400
 
     allowed, reason, _, _ = check_policy(user_id)
     if not allowed:
-        return jsonify({"error": reason, "blocked": True}), 429
+        # HARD BLOCK: Must refuse to call AI if limit reached
+        return jsonify({"error": "Policy Breach: Your daily limit is reached. Contact your Admin.", "blocked": True}), 429
 
     system_prompt = get_system_prompt(mode)
+    history = fetch_session_history(session_id)
+    
+    combined_prompt = message
+    if history:
+        combined_prompt = f"Context of previous conversation:\n{history}\n\nCurrent Prompt: {message}"
+
     start    = time.time()
-    response = call_claude(message, system_prompt=system_prompt)
+    response = call_google(combined_prompt, system_prompt=system_prompt)
     latency  = round((time.time() - start) * 1000, 2)
 
     tokens = response.get("tokens", 0)
@@ -70,66 +139,94 @@ def chat():
 
 # ── Modes ─────────────────────────────────────────────────────────────────────
 @app.route("/api/modes")
+@login_required
 def api_modes():
     return jsonify(all_modes())
 
 # ── Logs ──────────────────────────────────────────────────────────────────────
 @app.route("/api/logs")
+@login_required
 def get_logs():
     db = get_db()
     try:
-        logs = db.execute("""
-            SELECT id, user_id,
-                   COALESCE(prompt, user_message, '') as prompt,
-                   response,
-                   COALESCE(tokens, input_tokens + output_tokens, 0) as tokens,
-                   COALESCE(cost, cost_usd, 0) as cost,
-                   latency_ms, timestamp, mode
-            FROM api_logs
-            ORDER BY timestamp DESC LIMIT 100
-        """).fetchall()
+        if current_user.role == 'admin':
+            logs = db.execute("""
+                SELECT id, user_id,
+                       COALESCE(prompt, user_message, '') as prompt,
+                       response,
+                       COALESCE(tokens, input_tokens + output_tokens, 0) as tokens,
+                       COALESCE(cost, cost_usd, 0) as cost,
+                       latency_ms, timestamp, mode
+                FROM api_logs
+                ORDER BY timestamp DESC LIMIT 100
+            """).fetchall()
+        else:
+            logs = db.execute("""
+                SELECT id, user_id,
+                       COALESCE(prompt, user_message, '') as prompt,
+                       response,
+                       COALESCE(tokens, input_tokens + output_tokens, 0) as tokens,
+                       COALESCE(cost, cost_usd, 0) as cost,
+                       latency_ms, timestamp, mode
+                FROM api_logs
+                WHERE user_id = ?
+                ORDER BY timestamp DESC LIMIT 100
+            """, (current_user.user_id,)).fetchall()
     finally:
         db.close()
     return jsonify([dict(r) for r in logs])
 
 # ── Stats ─────────────────────────────────────────────────────────────────────
 @app.route("/api/stats")
+@login_required
 def get_stats():
     db = get_db()
     try:
-        total = db.execute("""
-            SELECT COUNT(*) as calls,
-                   SUM(COALESCE(tokens, input_tokens+output_tokens, 0)) as total_tokens,
-                   ROUND(SUM(COALESCE(cost, cost_usd, 0)), 4) as total_cost
-            FROM api_logs
-        """).fetchone()
+        if current_user.role == 'admin':
+            total = db.execute("""
+                SELECT COUNT(*) as calls,
+                       SUM(COALESCE(tokens, input_tokens+output_tokens, 0)) as total_tokens,
+                       ROUND(SUM(COALESCE(cost, cost_usd, 0)), 4) as total_cost
+                FROM api_logs
+            """).fetchone()
 
-        per_user = db.execute("""
-            SELECT user_id, COUNT(*) as calls,
-                   SUM(COALESCE(tokens, input_tokens+output_tokens, 0)) as tokens,
-                   ROUND(SUM(COALESCE(cost, cost_usd, 0)), 4) as cost
-            FROM api_logs
-            GROUP BY user_id ORDER BY cost DESC
-        """).fetchall()
+            per_user = db.execute("""
+                SELECT user_id, COUNT(*) as calls,
+                       SUM(COALESCE(tokens, input_tokens+output_tokens, 0)) as tokens,
+                       ROUND(SUM(COALESCE(cost, cost_usd, 0)), 4) as cost
+                FROM api_logs
+                GROUP BY user_id ORDER BY cost DESC
+            """).fetchall()
 
-        per_day = db.execute("""
-            SELECT DATE(timestamp) as day, COUNT(*) as calls,
-                   ROUND(SUM(COALESCE(cost, cost_usd, 0)), 4) as cost
-            FROM api_logs
-            GROUP BY DATE(timestamp)
-            ORDER BY day DESC LIMIT 7
-        """).fetchall()
+            per_day = db.execute("""
+                SELECT DATE(timestamp) as day, COUNT(*) as calls,
+                       ROUND(SUM(COALESCE(cost, cost_usd, 0)), 4) as cost
+                FROM api_logs
+                GROUP BY DATE(timestamp)
+                ORDER BY day DESC LIMIT 7
+            """).fetchall()
+        else:
+            total = db.execute("""
+                SELECT COUNT(*) as calls,
+                       SUM(COALESCE(tokens, input_tokens+output_tokens, 0)) as total_tokens,
+                       ROUND(SUM(COALESCE(cost, cost_usd, 0)), 4) as total_cost
+                FROM api_logs
+                WHERE user_id = ?
+            """, (current_user.user_id,)).fetchone()
+            per_user = []
+            per_day = []
     finally:
         db.close()
 
     return jsonify({
-        "totals":   dict(total),
+        "totals":   dict(total) if total else {"calls":0, "total_tokens":0, "total_cost":0},
         "per_user": [dict(r) for r in per_user],
         "per_day":  [dict(r) for r in per_day]
     })
 
 # ── Policies ──────────────────────────────────────────────────────────────────
 @app.route("/api/policies", methods=["GET"])
+@admin_required
 def get_policies():
     db = get_db()
     try:
@@ -139,6 +236,7 @@ def get_policies():
     return jsonify([dict(r) for r in rows])
 
 @app.route("/api/policies", methods=["POST"])
+@admin_required
 def save_policy():
     data = request.get_json()
     db = get_db()
@@ -166,6 +264,7 @@ def save_policy():
     return jsonify({"status": "saved"})
 
 @app.route("/api/policies/<user_id>", methods=["DELETE"])
+@admin_required
 def delete_policy(user_id):
     db = get_db()
     try:
@@ -177,6 +276,7 @@ def delete_policy(user_id):
 
 # ── Alerts ────────────────────────────────────────────────────────────────────
 @app.route("/api/alerts")
+@admin_required
 def get_alerts():
     db = get_db()
     try:
@@ -188,6 +288,7 @@ def get_alerts():
     return jsonify([dict(r) for r in rows])
 
 @app.route("/api/alerts/<int:alert_id>/resolve", methods=["POST"])
+@admin_required
 def resolve_alert(alert_id):
     db = get_db()
     try:
@@ -199,13 +300,17 @@ def resolve_alert(alert_id):
 
 # ── Usage ─────────────────────────────────────────────────────────────────────
 @app.route("/api/usage/<user_id>")
+@login_required
 def get_user_usage(user_id):
+    if current_user.role != 'admin' and current_user.user_id != user_id:
+        abort(403)
     usage  = get_today_usage(user_id)
     policy = get_policy(user_id)
     return jsonify({"usage": usage, "policy": policy})
 
 # ── Export ────────────────────────────────────────────────────────────────────
 @app.route("/admin/export")
+@admin_required
 def export_csv():
     user_filter = request.args.get("user_id")
     mode_filter = request.args.get("mode")
@@ -246,8 +351,10 @@ def export_csv():
 
 # ── Sessions ─────────────────────────────────────────────────────────────────────
 @app.route("/api/sessions/<user_id>")
+@login_required
 def get_sessions(user_id):
-    """Return all sessions for a user with message count."""
+    if current_user.role != 'admin' and current_user.user_id != user_id:
+        abort(403)
     db = get_db()
     try:
         rows = db.execute("""
@@ -266,8 +373,10 @@ def get_sessions(user_id):
     return jsonify([dict(r) for r in rows])
 
 @app.route("/api/sessions/<user_id>/<session_id>")
+@login_required
 def get_session_messages(user_id, session_id):
-    """Return all messages in a session."""
+    if current_user.role != 'admin' and current_user.user_id != user_id:
+        abort(403)
     db = get_db()
     try:
         rows = db.execute("""
@@ -282,4 +391,4 @@ def get_session_messages(user_id, session_id):
     return jsonify([dict(r) for r in rows])
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)

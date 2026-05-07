@@ -1,45 +1,33 @@
-# run this once: python seed.py
+# seed.py
 from database import get_db, init_db
-import random, datetime
+from werkzeug.security import generate_password_hash
 
-init_db()
+def seed_users():
+    conn = get_db()
+    # Drop and recreate users table to ensure schema is updated
+    conn.execute("DROP TABLE IF EXISTS users;")
+    conn.commit()
+    conn.close()
+    
+    init_db()
+    
+    # User list: name + 123 password logic
+    user_ids = ["seshan", "testuser", "john", "user_001", "user_002", "users"]
+    users_data = [{"user_id": "admin", "password": "admin123", "role": "admin"}]
+    
+    for uid in user_ids:
+        users_data.append({"user_id": uid, "password": uid + "123", "role": "user"})
+    
+    conn = get_db()
+    for u in users_data:
+        pwd_hash = generate_password_hash(u["password"])
+        conn.execute("""
+            INSERT INTO users (user_id, password_hash, role)
+            VALUES (?, ?, ?)
+        """, (u["user_id"], pwd_hash, u["role"]))
+    conn.commit()
+    conn.close()
+    print(f"Seeded {len(users_data)} users.")
 
-users = ["seshan", "admin", "analyst", "testuser"]
-messages = [
-    "Explain zero-day vulnerabilities",
-    "What is SIEM?",
-    "Summarize OWASP Top 10",
-    "How does PKI work?",
-    "What is threat modeling?"
-]
-responses = [
-    "Mock response about security concepts.",
-    "AIProxy governance layer processed this request.",
-    "This is a simulated AI response for testing.",
-]
-
-conn = get_db()
-for i in range(40):
-    days_ago = random.randint(0, 6)
-    ts = datetime.datetime.now() - datetime.timedelta(days=days_ago, hours=random.randint(0,23))
-    conn.execute("""
-        INSERT INTO api_logs 
-        (user_id, model, user_message, response, input_tokens, output_tokens, cost_usd, latency_ms, system_prompt, timestamp)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        random.choice(users),
-        "claude-sonnet-4-mock",
-        random.choice(messages),
-        random.choice(responses),
-        random.randint(50, 400),
-        random.randint(80, 500),
-        round(random.uniform(0.0001, 0.005), 6),
-        random.randint(150, 900),
-        "You are a helpful assistant.",
-        ts.strftime("%Y-%m-%d %H:%M:%S")
-    ))
-    conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (random.choice(users),))
-
-conn.commit()
-conn.close()
-print("Seeded 40 records across 4 users and 7 days.")
+if __name__ == "__main__":
+    seed_users()
