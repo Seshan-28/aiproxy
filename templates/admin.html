@@ -6,175 +6,154 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>AIProxy — Admin Panel</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
-            background: #0f1117;
-            color: #e0e0e0;
+            font-family: 'Outfit', sans-serif;
+            background: #0f172a;
+            color: #f8fafc;
         }
 
         .sidebar {
-            width: 220px;
+            width: 240px;
             min-height: 100vh;
-            background: #1a1d27;
+            background: #1e293b;
             padding: 24px 16px;
             position: fixed;
             top: 0;
             left: 0;
+            border-right: 1px solid #334155;
         }
 
         .main {
-            margin-left: 220px;
+            margin-left: 240px;
             padding: 32px;
         }
 
         .stat-card {
-            background: #1a1d27;
-            border: 1px solid #2a2d3a;
-            border-radius: 12px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 16px;
             padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
 
         .stat-card .value {
             font-size: 2rem;
-            font-weight: 700;
-            color: #f5a623;
+            font-weight: 600;
+            color: #60a5fa;
         }
 
         .stat-card .label {
             font-size: 0.85rem;
-            color: #888;
+            color: #94a3b8;
+            font-weight: 400;
         }
 
         .chart-card {
-            background: #1a1d27;
-            border: 1px solid #2a2d3a;
-            border-radius: 12px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 16px;
             padding: 24px;
         }
 
         .table-dark {
-            background: #1a1d27;
+            --bs-table-bg: #1e293b;
+            --bs-table-color: #f8fafc;
+            --bs-table-border-color: #334155;
         }
 
         .badge-user {
-            background: #f5a623;
-            color: #000;
+            background: #3b82f6;
+            color: #fff;
+            font-weight: 500;
         }
 
         .nav-link {
-            color: #aaa;
-            border-radius: 8px;
-            padding: 8px 12px;
+            color: #94a3b8;
+            border-radius: 12px;
+            padding: 10px 16px;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .nav-link:hover,
         .nav-link.active {
-            background: #2a2d3a;
-            color: #f5a623;
+            background: rgba(59, 130, 246, 0.1);
+            color: #60a5fa;
         }
 
         .search-box {
-            background: #1a1d27;
-            border: 1px solid #2a2d3a;
-            color: #e0e0e0;
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: #f8fafc;
+            border-radius: 10px;
         }
 
         .search-box:focus {
-            background: #1a1d27;
-            border-color: #f5a623;
-            color: #e0e0e0;
-            box-shadow: none;
+            background: #0f172a;
+            border-color: #3b82f6;
+            color: #f8fafc;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
         }
 
         .mode-badge {
             font-size: 0.7rem;
-            padding: 2px 7px;
-            border-radius: 10px;
+            padding: 4px 10px;
+            border-radius: 20px;
             font-weight: 600;
         }
 
-        .mode-general {
-            background: #2a2d3a;
-            color: #aaa;
-        }
+        .mode-general { background: #334155; color: #f8fafc; }
+        .mode-hr { background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.2); }
+        .mode-code { background: rgba(59, 130, 246, 0.1); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.2); }
+        .mode-security { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); }
 
-        .mode-hr {
-            background: #1b4332;
-            color: #81c784;
-        }
-
-        .mode-code {
-            background: #0d2137;
-            color: #4fc3f7;
-        }
-
-        .mode-security {
-            background: #3b1010;
-            color: #e57373;
-        }
-
-        /* Conversation modal */
         .conv-bubble-user {
-            background: #1a56db;
+            background: #3b82f6;
             color: #fff;
-            border-radius: 12px 12px 4px 12px;
-            padding: 8px 12px;
+            border-radius: 16px 16px 4px 16px;
+            padding: 10px 16px;
             margin-left: auto;
-            max-width: 75%;
+            max-width: 80%;
             margin-bottom: 8px;
-            width: fit-content;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
 
         .conv-bubble-ai {
-            background: #1a1d27;
-            border: 1px solid #2a2d3a;
-            border-radius: 12px 12px 12px 4px;
-            padding: 8px 12px;
-            max-width: 75%;
+            background: #334155;
+            color: #f8fafc;
+            border-radius: 16px 16px 16px 4px;
+            padding: 10px 16px;
+            max-width: 80%;
             margin-bottom: 8px;
-            width: fit-content;
         }
 
         .conv-meta {
             font-size: 0.7rem;
-            color: #888;
+            color: #94a3b8;
             margin-bottom: 12px;
         }
 
-        @media (max-width: 768px) {
-            .sidebar {
-                display: none;
-            }
-
-            .main {
-                margin-left: 0;
-                padding: 16px;
-            }
-        }
-
-        .chart-card h6 {
-            color: #e0e0e0 !important;
+        .table thead th {
+            color: #60a5fa !important;
             font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid #334155 !important;
+            padding: 12px 8px;
         }
 
-        /* Brighter table text */
-        #logsTableBody tr td {
-            color: #e0e0e0;
-        }
+        .text-muted { color: #94a3b8 !important; }
+        .text-warning { color: #f5a623 !important; }
 
-        #logsTableBody tr td.text-muted {
-            color: #aaaaaa !important;
-        }
-
-        .table-dark thead th {
-            color: #f5a623 !important;
-            font-weight: 700;
-        }
-
-        /* Response column specifically */
-        #logsTableBody .text-truncate {
-            color: #d0d0d0 !important;
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main { margin-left: 0; padding: 16px; }
         }
     </style>
 </head>

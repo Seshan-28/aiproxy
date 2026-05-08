@@ -14,6 +14,28 @@
         .text-muted { color: #94a3b8 !important; }
         .nav-link { color: #94a3b8; transition: color 0.3s; }
         .nav-link:hover { color: #60a5fa; }
+        
+        /* Table Visibility Fixes */
+        .table thead th { 
+            color: #60a5fa !important; 
+            font-weight: 600; 
+            text-transform: uppercase; 
+            font-size: 0.75rem; 
+            letter-spacing: 0.05em; 
+            border-bottom: 1px solid #334155 !important;
+            padding-bottom: 12px;
+        }
+        .table-dark { --bs-table-bg: #1e293b; --bs-table-color: #f8fafc; }
+        .stats-label { color: #94a3b8; font-weight: 500; }
+        .stats-value { color: #f8fafc; font-weight: 600; }
+        
+        /* Card Headings Visibility */
+        .card-header span, .card-title { 
+            color: #f8fafc !important; 
+            font-weight: 600 !important;
+            letter-spacing: -0.01em;
+        }
+        #activeModeLabel { color: #60a5fa !important; }
     </style>
 </head>
 <body class="p-4">
@@ -236,14 +258,14 @@
             const res = await fetch('/api/stats');
             const data = await res.json();
             let html = `
-                <div class="d-flex justify-content-between mb-1"><span>Calls:</span> <strong>${data.totals.calls}</strong></div>
-                <div class="d-flex justify-content-between mb-1"><span>Tokens:</span> <strong>${data.totals.total_tokens}</strong></div>
-                <div class="d-flex justify-content-between mb-3"><span>Cost:</span> <strong>$${data.totals.total_cost.toFixed(4)}</strong></div>
+                <div class="d-flex justify-content-between mb-1"><span class="stats-label">Calls:</span> <strong class="stats-value">${data.totals.calls}</strong></div>
+                <div class="d-flex justify-content-between mb-1"><span class="stats-label">Tokens:</span> <strong class="stats-value">${data.totals.total_tokens}</strong></div>
+                <div class="d-flex justify-content-between mb-3"><span class="stats-label">Cost:</span> <strong class="stats-value">$${data.totals.total_cost.toFixed(4)}</strong></div>
             `;
             if (data.per_user && data.per_user.length > 0) {
-                html += `<hr><div class="text-muted mb-2">Usage Breakdown:</div>`;
+                html += `<hr style="border-color: #334155"><div class="text-muted mb-2 small">Usage Breakdown:</div>`;
                 data.per_user.forEach(u => {
-                    html += `<div class="d-flex justify-content-between small"><span>${u.user_id}:</span> <span>$${u.cost.toFixed(4)}</span></div>`;
+                    html += `<div class="d-flex justify-content-between small mb-1"><span class="stats-label">${u.user_id}:</span> <span class="stats-value">$${u.cost.toFixed(4)}</span></div>`;
                 });
             }
             document.getElementById('statsOutput').innerHTML = html;

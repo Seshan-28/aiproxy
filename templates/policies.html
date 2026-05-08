@@ -4,94 +4,96 @@
     <meta charset="UTF-8">
     <title>AIProxy — Policies</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
-        body { background: #0f1117; color: #e0e0e0; }
-        .sidebar {
-            width: 220px; min-height: 100vh;
-            background: #1a1d27;
-            padding: 24px 16px;
-            position: fixed; top: 0; left: 0;
+        body { 
+            font-family: 'Outfit', sans-serif;
+            background: #0f172a; 
+            color: #f8fafc; 
         }
-        .main { margin-left: 220px; padding: 32px; }
+        .sidebar {
+            width: 240px; 
+            min-height: 100vh;
+            background: #1e293b;
+            padding: 24px 16px;
+            position: fixed; 
+            top: 0; 
+            left: 0;
+            border-right: 1px solid #334155;
+        }
+        .main { margin-left: 240px; padding: 32px; }
         .card-dark {
-            background: #1a1d27;
-            border: 1px solid #2a2d3a;
-            border-radius: 12px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 16px;
             padding: 24px;
             margin-bottom: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
-        .nav-link { color: #aaa; border-radius: 8px; padding: 8px 12px; }
-        .nav-link:hover, .nav-link.active { background: #2a2d3a; color: #f5a623; }
+        .nav-link { 
+            color: #94a3b8; 
+            border-radius: 12px; 
+            padding: 10px 16px; 
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .nav-link:hover, .nav-link.active { 
+            background: rgba(59, 130, 246, 0.1); 
+            color: #60a5fa; 
+        }
         .form-control, .form-select {
-            background: #0f1117;
-            border: 1px solid #2a2d3a;
-            color: #e0e0e0;
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: #f8fafc;
+            border-radius: 10px;
         }
         .form-control:focus {
-            background: #0f1117;
-            border-color: #f5a623;
-            color: #e0e0e0;
-            box-shadow: none;
+            background: #0f172a;
+            border-color: #3b82f6;
+            color: #f8fafc;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
         }
-        .form-label { color: #aaa; font-size: 0.85rem; margin-bottom: 4px; }
-        .progress { background: #2a2d3a; height: 8px; border-radius: 4px; }
+        .form-label { color: #94a3b8; font-size: 0.85rem; margin-bottom: 6px; font-weight: 500; }
+        .progress { background: #0f172a; height: 10px; border-radius: 20px; overflow: hidden; }
         .alert-row {
-            border-left: 3px solid #e57373;
-            padding: 10px 14px;
-            background: #12151f;
-            border-radius: 6px;
-            margin-bottom: 8px;
+            border-left: 4px solid #ef4444;
+            padding: 14px 18px;
+            background: rgba(239, 68, 68, 0.05);
+            border-radius: 12px;
+            margin-bottom: 12px;
+            border-top: 1px solid rgba(239, 68, 68, 0.1);
+            border-right: 1px solid rgba(239, 68, 68, 0.1);
+            border-bottom: 1px solid rgba(239, 68, 68, 0.1);
         }
-        .alert-row.warning { border-left-color: #f5a623; }
-        .alert-row.resolved { opacity: 0.4; }
-        .badge-block { background: #e57373; font-size: 0.75rem; }
-        .badge-warn  { background: #f5a623; color: #000; font-size: 0.75rem; }
-        .table-dark td, .table-dark th { vertical-align: middle; }
-        #errorBox { display:none; }
-        /* Section headings visibility */
-        h5, h6, .section-title {
-            color: #e0e0e0 !important;
+        .alert-row.warning { border-left-color: #f5a623; background: rgba(245, 166, 35, 0.05); }
+        .alert-row.resolved { opacity: 0.5; grayscale: 1; }
+        .badge-block { background: #ef4444; color: #fff; }
+        .badge-warn  { background: #f5a623; color: #fff; }
+        
+        .table-dark {
+            --bs-table-bg: #1e293b;
+            --bs-table-color: #f8fafc;
+            --bs-table-border-color: #334155;
+        }
+
+        .table thead th {
+            color: #60a5fa !important;
             font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid #334155 !important;
+            padding: 12px 8px;
         }
 
-        /* Table header text */
-        thead th {
-            color: #f5a623 !important;
-            font-weight: 700;
-        }
+        .text-muted { color: #94a3b8 !important; }
+        .text-warning { color: #f5a623 !important; }
+        .text-success { color: #10b981 !important; }
 
-        /* Table body text — all cells bright */
-        tbody td {
-            color: #e0e0e0 !important;
-        }
-
-        /* Alert feed text */
-        .alert-item, .list-group-item {
-            color: #e0e0e0 !important;
-            background: #1a1d27 !important;
-            border-color: #2a2d3a !important;
-        }
-
-        /* The "daily call limit reached" message text */
-        .alert-message, small, .text-muted {
-            color: #aaaaaa !important;
-        }
-
-        /* Alert type badges */
-        .badge {
-            font-weight: 600;
-        }
-        /* Today's Usage labels */
-        .usage-label, .progress-label {
-            color: #e0e0e0 !important;
-        }
-
-        /* Catch-all for any small text in the table */
-        tbody td small,
-        tbody td span,
-        tbody td {
-            color: #e0e0e0 !important;
-        }
+        h5, h6 { font-weight: 600; letter-spacing: -0.01em; }
+        #errorBox { display: none; }
     </style>
 </head>
 <body>
@@ -111,6 +113,10 @@
 </div>
 
 <div class="main">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="fw-bold">🛡️ Security Policies</h4>
+        <button class="btn btn-outline-warning btn-sm" onclick="loadPolicies(); loadAlerts();">↻ Refresh All</button>
+    </div>
 
     <!-- Error box -->
     <div id="errorBox" class="alert alert-danger"></div>
