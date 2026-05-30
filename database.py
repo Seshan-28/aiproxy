@@ -30,7 +30,8 @@ def init_db():
             prompt        TEXT,
             tokens        INTEGER DEFAULT 0,
             cost          REAL DEFAULT 0,
-            mode          TEXT DEFAULT 'general'
+            mode          TEXT DEFAULT 'general',
+            session_id    TEXT
         );
         CREATE TABLE IF NOT EXISTS users (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,

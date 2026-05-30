@@ -1,0 +1,11 @@
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.db
+aiproxy.db
+.git
+.gitignore
+.env
+data/

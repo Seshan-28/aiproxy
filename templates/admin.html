@@ -250,7 +250,11 @@
         <div class="chart-card">
             <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                 <h6 class="text-muted mb-0">Request History</h6>
-                <div class="d-flex gap-2 flex-wrap">
+                <div class="d-flex gap-2 flex-wrap align-items-center">
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-warning" id="prevPageBtn" onclick="prevPage()" title="Previous 100" disabled>←</button>
+                        <button class="btn btn-outline-warning" id="nextPageBtn" onclick="nextPage()" title="Next 100" disabled>→</button>
+                    </div>
                     <!-- Mode filter -->
                     <select id="modeFilter" class="form-select form-select-sm search-box w-auto"
                         onchange="filterLogs()">
@@ -304,6 +308,9 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let allLogs = [];
+        let totalLogsCount = 0;
+        let currentOffset = 0;
+        const logsLimit = 100;
         let dayChart, userChart, tokenChart;
 
         const modeColors = {
@@ -317,6 +324,7 @@
         };
 
         async function refreshAll() {
+            currentOffset = 0;
             await Promise.all([loadStats(), loadLogs()]);
         }
 
@@ -402,29 +410,48 @@
         }
 
         async function loadLogs() {
-            const res = await fetch('/api/logs');
-            allLogs = await res.json();
-            filterLogs();
+            const query = document.getElementById('searchInput').value;
+            const mode = document.getElementById('modeFilter').value;
+            
+            const res = await fetch(`/api/logs?offset=${currentOffset}&limit=${logsLimit}&search=${encodeURIComponent(query)}&mode=${mode}`);
+            const data = await res.json();
+            
+            allLogs = data.logs;
+            totalLogsCount = data.total_count;
+            
+            renderLogs(allLogs);
+            updatePaginationUI();
+        }
+
+        function nextPage() {
+            if (currentOffset + logsLimit < totalLogsCount) {
+                currentOffset += logsLimit;
+                loadLogs();
+            }
+        }
+
+        function prevPage() {
+            if (currentOffset >= logsLimit) {
+                currentOffset -= logsLimit;
+                loadLogs();
+            }
+        }
+
+        function updatePaginationUI() {
+            document.getElementById('prevPageBtn').disabled = (currentOffset === 0);
+            document.getElementById('nextPageBtn').disabled = (currentOffset + logsLimit >= totalLogsCount);
         }
 
         function filterLogs() {
-            const query = document.getElementById('searchInput').value.toLowerCase();
-            const modeFilter = document.getElementById('modeFilter').value;
-
-            const filtered = allLogs.filter(l => {
-                const matchMode = !modeFilter || (l.mode || 'general') === modeFilter;
-                const matchText = !query ||
-                    (l.user_id || '').toLowerCase().includes(query) ||
-                    (l.prompt || '').toLowerCase().includes(query) ||
-                    (l.response || '').toLowerCase().includes(query);
-                return matchMode && matchText;
-            });
-            renderLogs(filtered);
+            currentOffset = 0;
+            loadLogs();
         }
 
         function renderLogs(logs) {
             const tbody = document.getElementById('logsTableBody');
-            document.getElementById('logCount').textContent = `Showing ${logs.length} records`;
+            const end = Math.min(currentOffset + logsLimit, totalLogsCount);
+            document.getElementById('logCount').textContent = 
+                `Showing ${currentOffset + 1}-${end} of ${totalLogsCount} records`;
 
             tbody.innerHTML = logs.map((l, index) => {
                 const mode = l.mode || 'general';
@@ -437,7 +464,7 @@
 
                 return `
             <tr>
-                <td class="text-muted">${logs.length - index}</td>
+                <td class="text-muted">${totalLogsCount - currentOffset - index}</td>
                 <td><span class="badge badge-user">${l.user_id}</span></td>
                 <td><span class="mode-badge ${modeClass}">${modeIcon} ${mode}</span></td>
                 <td class="text-truncate" style="max-width:150px"

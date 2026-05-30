@@ -42,14 +42,15 @@ def policies_page():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
+        username   = request.form.get("username")
+        password   = request.form.get("password")
         login_type = request.form.get("login_type") # 'user' or 'admin'
 
         user_row = get_user_by_username(username)
         if user_row and check_password_hash(user_row["password_hash"], password):
+            # Strict role validation: must match button clicked
             if user_row["role"] != login_type:
-                flash(f"Access Denied: You are not registered as {login_type}.", "danger")
+                flash(f"Access Denied: Your role is '{user_row['role']}', not '{login_type}'.", "danger")
             else:
                 user_obj = User(id=user_row["id"], user_id=user_row["user_id"], role=user_row["role"])
                 login_user(user_obj)
@@ -70,17 +71,19 @@ def fetch_session_history(session_id, limit=5):
         return ""
     db = get_db()
     try:
+        # Fetch last 5 exchanges per session_id
         rows = db.execute("""
             SELECT prompt, response FROM api_logs
             WHERE session_id = ?
-            ORDER BY timestamp DESC LIMIT ?
+            ORDER BY id DESC LIMIT ?
         """, (session_id, limit)).fetchall()
         
-        # Reverse to get chronological order
-        rows.reverse()
+        # Reverse to get chronological order (oldest first)
+        history_rows = list(rows)
+        history_rows.reverse()
         
         history_str = ""
-        for r in rows:
+        for r in history_rows:
             history_str += f"User: {r['prompt']}\nAI: {r['response']}\n"
         return history_str
     finally:
@@ -101,18 +104,20 @@ def chat():
 
     allowed, reason, _, _ = check_policy(user_id)
     if not allowed:
-        # HARD BLOCK: Must refuse to call AI if limit reached
-        return jsonify({"error": "Policy Breach: Your daily limit is reached. Contact your Admin.", "blocked": True}), 429
+        # HARD BLOCK: Return 403 for policy breach as requested
+        return jsonify({"error": "Daily limit reached. Access blocked by AIProxy Governance."}), 403
 
-    system_prompt = get_system_prompt(mode)
+    system_instructions = get_system_prompt(mode)
     history = fetch_session_history(session_id)
     
-    combined_prompt = message
+    # Construction: [System Mode Instructions] + [Conversation History] + [New User Message]
+    combined_prompt = f"SYSTEM INSTRUCTIONS:\n{system_instructions}\n\n"
     if history:
-        combined_prompt = f"Context of previous conversation:\n{history}\n\nCurrent Prompt: {message}"
+        combined_prompt += f"CONVERSATION HISTORY:\n{history}\n\n"
+    combined_prompt += f"NEW USER MESSAGE: {message}"
 
     start    = time.time()
-    response = call_google(combined_prompt, system_prompt=system_prompt)
+    response = call_google(combined_prompt) # system_prompt is now inside combined_prompt
     latency  = round((time.time() - start) * 1000, 2)
 
     tokens = response.get("tokens", 0)
@@ -147,34 +152,56 @@ def api_modes():
 @app.route("/api/logs")
 @login_required
 def get_logs():
+    offset = int(request.args.get("offset", 0))
+    limit = int(request.args.get("limit", 100))
+    search = request.args.get("search", "").strip()
+    mode_filter = request.args.get("mode", "").strip()
+
     db = get_db()
     try:
-        if current_user.role == 'admin':
-            logs = db.execute("""
-                SELECT id, user_id,
-                       COALESCE(prompt, user_message, '') as prompt,
-                       response,
-                       COALESCE(tokens, input_tokens + output_tokens, 0) as tokens,
-                       COALESCE(cost, cost_usd, 0) as cost,
-                       latency_ms, timestamp, mode
-                FROM api_logs
-                ORDER BY timestamp DESC LIMIT 100
-            """).fetchall()
-        else:
-            logs = db.execute("""
-                SELECT id, user_id,
-                       COALESCE(prompt, user_message, '') as prompt,
-                       response,
-                       COALESCE(tokens, input_tokens + output_tokens, 0) as tokens,
-                       COALESCE(cost, cost_usd, 0) as cost,
-                       latency_ms, timestamp, mode
-                FROM api_logs
-                WHERE user_id = ?
-                ORDER BY timestamp DESC LIMIT 100
-            """, (current_user.user_id,)).fetchall()
+        where_clauses = []
+        params = []
+
+        if current_user.role != 'admin':
+            where_clauses.append("user_id = ?")
+            params.append(current_user.user_id)
+        
+        if mode_filter:
+            where_clauses.append("mode = ?")
+            params.append(mode_filter)
+            
+        if search:
+            where_clauses.append("(user_id LIKE ? OR prompt LIKE ? OR response LIKE ? OR user_message LIKE ?)")
+            search_param = f"%{search}%"
+            params.extend([search_param, search_param, search_param, search_param])
+
+        where_str = " WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+
+        # Total count
+        total_count = db.execute(f"SELECT COUNT(*) FROM api_logs {where_str}", params).fetchone()[0]
+
+        # Logs
+        query = f"""
+            SELECT id, user_id,
+                   COALESCE(prompt, user_message, '') as prompt,
+                   response,
+                   COALESCE(tokens, input_tokens + output_tokens, 0) as tokens,
+                   COALESCE(cost, cost_usd, 0) as cost,
+                   latency_ms, timestamp, mode
+            FROM api_logs
+            {where_str}
+            ORDER BY timestamp DESC
+            LIMIT ? OFFSET ?
+        """
+        logs = db.execute(query, params + [limit, offset]).fetchall()
     finally:
         db.close()
-    return jsonify([dict(r) for r in logs])
+    return jsonify({
+        "logs": [dict(r) for r in logs],
+        "total_count": total_count,
+        "offset": offset,
+        "limit": limit
+    })
 
 # ── Stats ─────────────────────────────────────────────────────────────────────
 @app.route("/api/stats")

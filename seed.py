@@ -11,12 +11,11 @@ def seed_users():
     
     init_db()
     
-    # User list: name + 123 password logic
-    user_ids = ["seshan", "testuser", "john", "user_001", "user_002", "users"]
-    users_data = [{"user_id": "admin", "password": "admin123", "role": "admin"}]
-    
-    for uid in user_ids:
-        users_data.append({"user_id": uid, "password": uid + "123", "role": "user"})
+    # User list: One Admin and One User
+    users_data = [
+        {"user_id": "admin", "password": "admin123", "role": "admin"},
+        {"user_id": "user", "password": "user123", "role": "user"}
+    ]
     
     conn = get_db()
     for u in users_data:

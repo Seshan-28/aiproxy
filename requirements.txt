@@ -2,3 +2,6 @@ flask
 anthropic
 python-dotenv
 flask-login
+requests
+werkzeug
+gunicorn

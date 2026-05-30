@@ -176,9 +176,11 @@
             
             const data = await res.json();
 
-            if (res.status === 429 || data.blocked) {
+            if (res.status === 403 || res.status === 429) {
                 appendSystem(`⛔ Blocked: ${data.error}`);
-                document.getElementById('blockWarning').classList.remove('d-none');
+                const warningEl = document.getElementById('blockWarning');
+                warningEl.innerHTML = `<strong>⛔ Policy Breach:</strong> ${data.error}`;
+                warningEl.classList.remove('d-none');
                 input.disabled = true;
                 document.getElementById('sendBtn').disabled = true;
             } else if (!res.ok) {
@@ -221,9 +223,15 @@
         <div class="col-md-8">
             <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title d-flex justify-content-between">
+                    <h5 class="card-title d-flex justify-content-between align-items-center">
                         Recent Logs
-                        <button class="btn btn-sm btn-outline-light" onclick="loadLogs()">Refresh</button>
+                        <div class="d-flex gap-2">
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-light" id="prevPageBtn" onclick="prevPage()" disabled>←</button>
+                                <button class="btn btn-outline-light" id="nextPageBtn" onclick="nextPage()" disabled>→</button>
+                            </div>
+                            <button class="btn btn-sm btn-outline-light" onclick="loadLogs(0)">Refresh</button>
+                        </div>
                     </h5>
                     <div class="table-responsive">
                         <table class="table table-dark table-sm table-hover mt-3" style="font-size: 0.85rem;">
@@ -239,19 +247,47 @@
     </div>
 
     <script>
-        async function loadLogs() {
-            const res = await fetch('/api/logs');
-            const logs = await res.json();
+        let currentOffset = 0;
+        let totalLogsCount = 0;
+        const logsLimit = 100;
+
+        async function loadLogs(offset = currentOffset) {
+            currentOffset = offset;
+            const res = await fetch(`/api/logs?offset=${currentOffset}&limit=${logsLimit}`);
+            const data = await res.json();
+            const logs = data.logs || [];
+            totalLogsCount = data.total_count;
+
             const tbody = document.getElementById('logsTable');
             tbody.innerHTML = logs.map((l, index) => `
                 <tr>
-                    <td>${logs.length - index}</td>
+                    <td>${totalLogsCount - currentOffset - index}</td>
                     <td class="text-truncate" style="max-width:250px" title="${l.prompt}">${l.prompt}</td>
                     <td>${l.tokens}</td>
                     <td>$${l.cost.toFixed(4)}</td>
                     <td>${new Date(l.timestamp).toLocaleTimeString()}</td>
                 </tr>
             `).join('');
+            updatePaginationUI();
+        }
+
+        function nextPage() {
+            if (currentOffset + logsLimit < totalLogsCount) {
+                currentOffset += logsLimit;
+                loadLogs();
+            }
+        }
+
+        function prevPage() {
+            if (currentOffset >= logsLimit) {
+                currentOffset -= logsLimit;
+                loadLogs();
+            }
+        }
+
+        function updatePaginationUI() {
+            document.getElementById('prevPageBtn').disabled = (currentOffset === 0);
+            document.getElementById('nextPageBtn').disabled = (currentOffset + logsLimit >= totalLogsCount);
         }
 
         async function loadStats() {

@@ -22,11 +22,6 @@ def call_google(user_message: str, system_prompt: str = "You are a helpful assis
     }
 
     body = {
-        "systemInstruction": {
-            "parts": [
-                {"text": system_prompt}
-            ]
-        },
         "contents": [
             {
                 "role": "user",
